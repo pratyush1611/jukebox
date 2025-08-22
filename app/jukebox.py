@@ -10,6 +10,8 @@ import uuid
 
 from flask import Flask, jsonify, request, send_from_directory
 
+VERSION = "0.0.0"
+
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "5000"))
 IPC_SOCK = os.environ.get("MPV_IPC", "/tmp/mpv.sock")
@@ -78,8 +80,9 @@ def mpv_send(cmd):
 
 
 def resolve_media(q_or_url):
-    import yt_dlp
     import threading
+
+    import yt_dlp
 
     music_dir = os.path.expanduser("~/storage/Music")
     ydl_opts = {
@@ -94,12 +97,12 @@ def resolve_media(q_or_url):
         info = ydl.extract_info(q_or_url, download=False)
         if "entries" in info:
             info = info["entries"][0]
-        
+
         video_id = info.get("id")
         title = info.get("title") or "Unknown"
         uploader = info.get("uploader") or info.get("channel") or ""
         duration = info.get("duration") or 0
-        
+
         # Start download in background
         def download_bg():
             try:
@@ -111,15 +114,23 @@ def resolve_media(q_or_url):
                 conn = sqlite3.connect(f"{db_dir}/music.db")
                 conn.execute(
                     "INSERT OR REPLACE INTO downloads (id, title, uploader, duration, url, filepath) VALUES (?, ?, ?, ?, ?, ?)",
-                    (video_id, title, uploader, duration, info["webpage_url"], filepath)
+                    (
+                        video_id,
+                        title,
+                        uploader,
+                        duration,
+                        info["webpage_url"],
+                        filepath,
+                    ),
                 )
                 conn.commit()
                 conn.close()
                 print(f"✓ Download of {title} complete")
             except Exception:
                 pass
+
         threading.Thread(target=download_bg, daemon=True).start()
-        
+
         return {
             "title": title,
             "uploader": uploader,
@@ -141,21 +152,33 @@ def player_loop():
                     # Get last played song for autoplay
                     db_dir = "/app/data" if os.path.exists("/app") else "data"
                     conn = sqlite3.connect(f"{db_dir}/music.db")
-                    last_song = conn.execute("SELECT title, uploader FROM downloads ORDER BY downloaded_at DESC LIMIT 1").fetchone()
+                    last_song = conn.execute(
+                        "SELECT title, uploader FROM downloads ORDER BY downloaded_at DESC LIMIT 1"
+                    ).fetchone()
                     conn.close()
-                    
+
                     if last_song:
                         # Search for similar songs
                         search_query = f"{last_song[0]} {last_song[1]} similar songs"
                         autoplay_meta = resolve_media(search_query)
-                        autoplay_item = {"id": uuid.uuid4().hex[:8], **autoplay_meta, "added_by": "autoplay"}
+                        autoplay_item = {
+                            "id": uuid.uuid4().hex[:8],
+                            **autoplay_meta,
+                            "added_by": "autoplay",
+                        }
                         current = autoplay_item
                         mpv_send({"command": ["loadfile", current["url"], "replace"]})
                     else:
                         # Fallback to random downloaded file
-                        result = conn.execute("SELECT title, filepath FROM downloads ORDER BY RANDOM() LIMIT 1").fetchone()
+                        result = conn.execute(
+                            "SELECT title, filepath FROM downloads ORDER BY RANDOM() LIMIT 1"
+                        ).fetchone()
                         if result and os.path.exists(result[1]):
-                            current = {"title": result[0], "uploader": "Downloaded", "url": result[1]}
+                            current = {
+                                "title": result[0],
+                                "uploader": "Downloaded",
+                                "url": result[1],
+                            }
                             mpv_send({"command": ["loadfile", result[1], "replace"]})
                 except Exception:
                     pass
@@ -206,7 +229,11 @@ def get_queue():
             try:
                 s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                 s.connect(IPC_SOCK)
-                s.sendall((json.dumps({"command": ["get_property", "time-pos"]}) + "\n").encode())
+                s.sendall(
+                    (
+                        json.dumps({"command": ["get_property", "time-pos"]}) + "\n"
+                    ).encode()
+                )
                 data = s.recv(2048).decode()
                 s.close()
                 if '"data":' in data:
@@ -264,4 +291,5 @@ def seek():
 
 
 if __name__ == "__main__":
+    print(f"Starting Wi-Fi Jukebox v{VERSION}")
     app.run(host=HOST, port=PORT)
