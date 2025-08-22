@@ -102,16 +102,42 @@ def resolve_media(q_or_url):
         title = info.get("title") or "Unknown"
         uploader = info.get("uploader") or info.get("channel") or ""
         duration = info.get("duration") or 0
+        
+        # Check if already downloaded first
+        db_dir = "/app/data" if os.path.exists("/app") else "data"
+        try:
+            conn = sqlite3.connect(f"{db_dir}/music.db")
+            existing = conn.execute("SELECT filepath FROM downloads WHERE title = ?", (title,)).fetchone()
+            conn.close()
+            
+            if existing and os.path.exists(existing[0]):
+                print(f"⏭ Playing {title} from local file")
+                return {
+                    "title": title,
+                    "uploader": uploader,
+                    "duration": duration,
+                    "url": existing[0],  # Use local file path
+                }
+        except Exception:
+            pass
 
         # Start download in background
         def download_bg():
             try:
+                # Check if already downloaded
+                db_dir = "/app/data" if os.path.exists("/app") else "data"
+                conn = sqlite3.connect(f"{db_dir}/music.db")
+                existing = conn.execute("SELECT filepath FROM downloads WHERE title = ?", (title,)).fetchone()
+                
+                if existing and os.path.exists(existing[0]):
+                    conn.close()
+                    print(f"⏭ {title} already downloaded")
+                    return
+                
                 os.makedirs(music_dir, exist_ok=True)
                 ydl.download([info["webpage_url"]])
                 # Save to database
                 filepath = f"{music_dir}/{title}.{info.get('ext', 'm4a')}"
-                db_dir = "/app/data" if os.path.exists("/app") else "data"
-                conn = sqlite3.connect(f"{db_dir}/music.db")
                 conn.execute(
                     "INSERT OR REPLACE INTO downloads (id, title, uploader, duration, url, filepath) VALUES (?, ?, ?, ?, ?, ?)",
                     (
