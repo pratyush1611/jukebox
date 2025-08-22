@@ -1,0 +1,13 @@
+version: "3.8"
+services:
+  jukebox:
+    build: .
+    ports: ["5000:5000"]
+    environment:
+      - MPV_IPC=/tmp/mpv.sock
+      - MPV_EXTRA=--ao=null   # silent backend for dev
+      - PORT=5000
+    volumes:
+      - ./app:/app
+      - ./downloads:/home/user/storage/Music
+      - ./data:/app/data
