@@ -10,7 +10,7 @@ import uuid
 
 from flask import Flask, jsonify, request, send_from_directory
 
-VERSION = "0.0.0"
+VERSION = "0.0.1"
 
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "5000"))
@@ -102,14 +102,16 @@ def resolve_media(q_or_url):
         title = info.get("title") or "Unknown"
         uploader = info.get("uploader") or info.get("channel") or ""
         duration = info.get("duration") or 0
-        
+
         # Check if already downloaded first
         db_dir = "/app/data" if os.path.exists("/app") else "data"
         try:
             conn = sqlite3.connect(f"{db_dir}/music.db")
-            existing = conn.execute("SELECT filepath FROM downloads WHERE title = ?", (title,)).fetchone()
+            existing = conn.execute(
+                "SELECT filepath FROM downloads WHERE title = ?", (title,)
+            ).fetchone()
             conn.close()
-            
+
             if existing and os.path.exists(existing[0]):
                 print(f"⏭ Playing {title} from local file")
                 return {
@@ -127,13 +129,15 @@ def resolve_media(q_or_url):
                 # Check if already downloaded
                 db_dir = "/app/data" if os.path.exists("/app") else "data"
                 conn = sqlite3.connect(f"{db_dir}/music.db")
-                existing = conn.execute("SELECT filepath FROM downloads WHERE title = ?", (title,)).fetchone()
-                
+                existing = conn.execute(
+                    "SELECT filepath FROM downloads WHERE title = ?", (title,)
+                ).fetchone()
+
                 if existing and os.path.exists(existing[0]):
                     conn.close()
                     print(f"⏭ {title} already downloaded")
                     return
-                
+
                 os.makedirs(music_dir, exist_ok=True)
                 ydl.download([info["webpage_url"]])
                 # Save to database
@@ -181,24 +185,29 @@ def player_loop():
                     last_song = conn.execute(
                         "SELECT title, uploader FROM downloads ORDER BY downloaded_at DESC LIMIT 1"
                     ).fetchone()
-                    conn.close()
-
+                    
                     if last_song:
+                        conn.close()
                         # Search for similar songs
                         search_query = f"{last_song[0]} {last_song[1]} similar songs"
-                        autoplay_meta = resolve_media(search_query)
-                        autoplay_item = {
-                            "id": uuid.uuid4().hex[:8],
-                            **autoplay_meta,
-                            "added_by": "autoplay",
-                        }
-                        current = autoplay_item
-                        mpv_send({"command": ["loadfile", current["url"], "replace"]})
+                        try:
+                            autoplay_meta = resolve_media(search_query)
+                            autoplay_item = {
+                                "id": uuid.uuid4().hex[:8],
+                                **autoplay_meta,
+                                "added_by": "autoplay",
+                            }
+                            current = autoplay_item
+                            mpv_send({"command": ["loadfile", current["url"], "replace"]})
+                            print(f"🎵 Autoplay: {autoplay_item['title']}")
+                        except Exception:
+                            pass
                     else:
                         # Fallback to random downloaded file
                         result = conn.execute(
                             "SELECT title, filepath FROM downloads ORDER BY RANDOM() LIMIT 1"
                         ).fetchone()
+                        conn.close()
                         if result and os.path.exists(result[1]):
                             current = {
                                 "title": result[0],
