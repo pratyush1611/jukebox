@@ -169,54 +169,61 @@ def resolve_media(q_or_url):
         }
 
 
+def fill_autoplay_queue():
+    """Fill queue with 3 autoplay suggestions"""
+    try:
+        db_dir = "/app/data" if os.path.exists("/app") else "data"
+        conn = sqlite3.connect(f"{db_dir}/music.db")
+        last_song = conn.execute(
+            "SELECT title, uploader FROM downloads ORDER BY downloaded_at DESC LIMIT 1"
+        ).fetchone()
+        random_songs = conn.execute(
+            "SELECT title, uploader FROM downloads ORDER BY RANDOM() LIMIT 3"
+        ).fetchall()
+        conn.close()
+        
+        if last_song:
+            import random
+            search_options = [
+                f"{last_song[1]} songs",
+                f"{random_songs[0][1] if random_songs else last_song[1]} music",
+                f"songs like {last_song[0]}",
+                "trending music 2024",
+            ]
+            
+            for i in range(3):
+                try:
+                    search_query = random.choice(search_options)
+                    autoplay_meta = resolve_media(search_query)
+                    autoplay_item = {
+                        "id": uuid.uuid4().hex[:8],
+                        **autoplay_meta,
+                        "added_by": "autoplay",
+                    }
+                    play_queue.append(autoplay_item)
+                    print(f"🎵 Added to queue ({search_query}): {autoplay_item['title']}")
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
 def player_loop():
     global current
     while True:
         with state_lock:
+            # Keep queue filled with 3 songs
+            if len(play_queue) < 3:
+                fill_autoplay_queue()
+            
             if current is None and play_queue:
                 current = play_queue.pop(0)
                 mpv_send({"command": ["loadfile", current["url"], "replace"]})
-            elif current is None and not play_queue:
-                # Queue empty, try YouTube autoplay or fallback to downloaded files
-                try:
-                    # Get last played song for autoplay
-                    db_dir = "/app/data" if os.path.exists("/app") else "data"
-                    conn = sqlite3.connect(f"{db_dir}/music.db")
-                    last_song = conn.execute(
-                        "SELECT title, uploader FROM downloads ORDER BY downloaded_at DESC LIMIT 1"
-                    ).fetchone()
-                    
-                    if last_song:
-                        conn.close()
-                        # Search for similar songs
-                        search_query = f"{last_song[0]} {last_song[1]} similar songs"
-                        try:
-                            autoplay_meta = resolve_media(search_query)
-                            autoplay_item = {
-                                "id": uuid.uuid4().hex[:8],
-                                **autoplay_meta,
-                                "added_by": "autoplay",
-                            }
-                            current = autoplay_item
-                            mpv_send({"command": ["loadfile", current["url"], "replace"]})
-                            print(f"🎵 Autoplay: {autoplay_item['title']}")
-                        except Exception:
-                            pass
-                    else:
-                        # Fallback to random downloaded file
-                        result = conn.execute(
-                            "SELECT title, filepath FROM downloads ORDER BY RANDOM() LIMIT 1"
-                        ).fetchone()
-                        conn.close()
-                        if result and os.path.exists(result[1]):
-                            current = {
-                                "title": result[0],
-                                "uploader": "Downloaded",
-                                "url": result[1],
-                            }
-                            mpv_send({"command": ["loadfile", result[1], "replace"]})
-                except Exception:
-                    pass
+        # Keep queue filled
+        with state_lock:
+            if len(play_queue) < 3:
+                fill_autoplay_queue()
+        
         try:
             cmd = cmd_queue.get(timeout=0.3)
             if cmd == "skip":

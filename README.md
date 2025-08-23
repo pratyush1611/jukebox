@@ -21,6 +21,7 @@ A web-based music player that runs on Android (via Termux) and lets people on th
 git clone <repo-url>
 cd jukebox
 bash scripts/setup_termux.sh
+bash scripts/setup_boot.sh  # Optional: auto-start on boot
 bash scripts/start_termux.sh
 ```
 
