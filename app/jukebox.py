@@ -15,13 +15,7 @@ import requests
 import yt_dlp
 from flask import Flask, jsonify, request, send_from_directory
 
-# Read version from VERSION file
-try:
-    with open("VERSION", "r") as f:
-        VERSION = f.read().strip()
-except FileNotFoundError:
-    with open("../VERSION", "r") as f:  # Fallback for Docker
-        VERSION = f.read().strip()
+
 
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "5000"))
@@ -190,10 +184,14 @@ def resolve_media(q_or_url):
 
                     # Download with organized structure
                     download_opts = ydl_opts.copy()
+                    # Ensure metadata directory exists
+                    metadata_dir = f"{target_dir}/metadata"
+                    os.makedirs(metadata_dir, exist_ok=True)
+                    
                     download_opts["outtmpl"] = {
                         "default": f"{target_dir}/{artist} - {title}.%(ext)s",
-                        "infojson": f"{target_dir}/metadata/{artist} - {title}.%(ext)s",
-                        "thumbnail": f"{target_dir}/metadata/{artist} - {title}.%(ext)s",
+                        "infojson": f"{metadata_dir}/{artist} - {title}.%(ext)s",
+                        "thumbnail": f"{metadata_dir}/{artist} - {title}.%(ext)s",
                     }
 
                     with yt_dlp.YoutubeDL(download_opts) as download_ydl:
@@ -494,5 +492,5 @@ def seek():
 
 
 if __name__ == "__main__":
-    print(f"Starting Wi-Fi Jukebox v{VERSION}")
+    print("Starting Wi-Fi Jukebox")
     app.run(host=HOST, port=PORT)
