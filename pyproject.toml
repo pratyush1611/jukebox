@@ -7,6 +7,10 @@ requires-python = ">=3.12"
 dependencies = [
     "flask~=3.1.2",
     "yt-dlp~=2025.8.20",
-    "requests~=2.32.0",
+    "requests~=2.32.0"
+]
+
+[dependency-groups]
+dev = [
     "ruff~=0.6.0"
 ]

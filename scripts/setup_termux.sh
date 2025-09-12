@@ -10,8 +10,9 @@ termux-setup-storage
 export HOST_IP=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
 echo "Host IP: $HOST_IP"
 
-# install deps using uv
-uv sync
+# install deps using uv (much faster now without ruff)
+echo "Installing Python dependencies..."
+uv sync --no-dev  # Skip ruff for faster Termux install
 
 termux-wake-lock
 echo "Setup complete with uv. Music will be stored in ~/storage/music (Android Music folder)"
