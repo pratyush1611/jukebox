@@ -16,7 +16,6 @@ import yt_dlp
 from flask import Flask, jsonify, request, send_from_directory
 
 
-
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "5000"))
 IPC_SOCK = os.environ.get("MPV_IPC", "/tmp/mpv.sock")
@@ -109,23 +108,42 @@ def resolve_media(q_or_url):
                     duration = entry.get("duration", 0)
                     title = entry.get("title", "").lower()
                     uploader = entry.get("uploader", "").lower()
-                    
+
                     # Skip if too long (>20 min) or too short (<30 sec)
                     if duration and (duration > 1200 or duration < 30):
                         continue
-                    
+
                     # Prefer music-related content
-                    music_keywords = ["official", "music", "audio", "song", "album", "single"]
-                    avoid_keywords = ["podcast", "interview", "live stream", "tutorial", "review"]
-                    
-                    has_music_keyword = any(keyword in title or keyword in uploader for keyword in music_keywords)
-                    has_avoid_keyword = any(keyword in title or keyword in uploader for keyword in avoid_keywords)
-                    
+                    music_keywords = [
+                        "official",
+                        "music",
+                        "audio",
+                        "song",
+                        "album",
+                        "single",
+                    ]
+                    avoid_keywords = [
+                        "podcast",
+                        "interview",
+                        "live stream",
+                        "tutorial",
+                        "review",
+                    ]
+
+                    has_music_keyword = any(
+                        keyword in title or keyword in uploader
+                        for keyword in music_keywords
+                    )
+                    has_avoid_keyword = any(
+                        keyword in title or keyword in uploader
+                        for keyword in avoid_keywords
+                    )
+
                     if has_avoid_keyword:
                         continue
-                    
+
                     music_entries.append((entry, has_music_keyword))
-                
+
                 if music_entries:
                     # Sort by music preference (music keywords first)
                     music_entries.sort(key=lambda x: x[1], reverse=True)
@@ -187,7 +205,7 @@ def resolve_media(q_or_url):
                     # Ensure metadata directory exists
                     metadata_dir = f"{target_dir}/metadata"
                     os.makedirs(metadata_dir, exist_ok=True)
-                    
+
                     download_opts["outtmpl"] = {
                         "default": f"{target_dir}/{artist} - {title}.%(ext)s",
                         "infojson": f"{metadata_dir}/{artist} - {title}.%(ext)s",
@@ -332,15 +350,16 @@ def fill_autoplay_queue():
                 autoplay_meta = resolve_media(search_query)
                 if autoplay_meta:
                     song_id = f"{autoplay_meta['title']}-{autoplay_meta['uploader']}"
-                    
+
                     # Skip if already suggested or in current queue
-                    if (song_id in suggested_songs or 
-                        any(item.get('title') == autoplay_meta['title'] and 
-                            item.get('uploader') == autoplay_meta['uploader'] 
-                            for item in play_queue)):
+                    if song_id in suggested_songs or any(
+                        item.get("title") == autoplay_meta["title"]
+                        and item.get("uploader") == autoplay_meta["uploader"]
+                        for item in play_queue
+                    ):
                         print(f"🔄 Skipping duplicate: {autoplay_meta['title']}")
                         continue
-                    
+
                     autoplay_item = {
                         "id": uuid.uuid4().hex[:8],
                         **autoplay_meta,
@@ -349,7 +368,9 @@ def fill_autoplay_queue():
                     play_queue.append(autoplay_item)
                     suggested_songs.add(song_id)
                     added_count += 1
-                    print(f"🎵 Added via Last.fm ({search_query}): {autoplay_item['title']}")
+                    print(
+                        f"🎵 Added via Last.fm ({search_query}): {autoplay_item['title']}"
+                    )
             except Exception as e:
                 print(f"Autoplay failed for {search_query}: {e}")
     except Exception as e:
