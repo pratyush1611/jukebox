@@ -6,7 +6,7 @@ services:
       - MPV_IPC=/tmp/mpv.sock
       - MPV_EXTRA=--ao=null   # silent backend for dev
       - PORT=5000
-      - HOST_IP=192.168.200.205  # Replace with your actual IP
+      - HOST_IP
     volumes:
       - ./app:/app
       - ./downloads:/root/storage/Music
