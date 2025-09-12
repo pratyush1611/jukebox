@@ -80,93 +80,110 @@ def mpv_send(cmd):
 
 
 def resolve_media(q_or_url):
+    import requests
+    import re
     import threading
-
-    import yt_dlp
-
-    music_dir = os.path.expanduser("~/storage/Music")
-    ydl_opts = {
-        "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
-        "quiet": True,
-        "no_warnings": True,
-        "noplaylist": True,
-        "default_search": "ytsearch",
-        "outtmpl": f"{music_dir}/%(title)s.%(ext)s",
-    }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(q_or_url, download=False)
-        if "entries" in info:
-            info = info["entries"][0]
-
-        video_id = info.get("id")
-        title = info.get("title") or "Unknown"
-        uploader = info.get("uploader") or info.get("channel") or ""
-        duration = info.get("duration") or 0
-
-        # Check if already downloaded first
+    
+    # Extract video ID from URL or search
+    video_id = None
+    if "youtube.com" in q_or_url or "youtu.be" in q_or_url:
+        # Extract video ID from YouTube URL
+        match = re.search(r'(?:v=|/)([a-zA-Z0-9_-]{11})', q_or_url)
+        if match:
+            video_id = match.group(1)
+    
+    if not video_id:
+        # Search for video
+        try:
+            search_url = f"https://pipedapi.kavin.rocks/search?q={requests.utils.quote(q_or_url)}&filter=videos"
+            response = requests.get(search_url, timeout=10)
+            results = response.json()
+            if results and len(results) > 0:
+                video_id = results[0]["url"].split("/")[-1]
+        except Exception as e:
+            print(f"Search failed: {e}")
+            return None
+    
+    if not video_id:
+        return None
+    
+    try:
+        # Get stream info from Piped
+        stream_url = f"https://pipedapi.kavin.rocks/streams/{video_id}"
+        response = requests.get(stream_url, timeout=10)
+        data = response.json()
+        
+        title = data.get("title", "Unknown")
+        uploader = data.get("uploader", "Unknown")
+        duration = data.get("duration", 0)
+        
+        # Get best audio stream
+        audio_streams = data.get("audioStreams", [])
+        if not audio_streams:
+            return None
+        
+        # Sort by quality and get best
+        best_stream = max(audio_streams, key=lambda x: x.get("bitrate", 0))
+        stream_url = best_stream["url"]
+        
+        # Check if already downloaded
         db_dir = "/app/data" if os.path.exists("/app") else "data"
         try:
             conn = sqlite3.connect(f"{db_dir}/music.db")
-            existing = conn.execute(
-                "SELECT filepath FROM downloads WHERE title = ?", (title,)
-            ).fetchone()
+            existing = conn.execute("SELECT filepath FROM downloads WHERE title = ?", (title,)).fetchone()
             conn.close()
-
+            
             if existing and os.path.exists(existing[0]):
                 print(f"⏭ Playing {title} from local file")
                 return {
                     "title": title,
                     "uploader": uploader,
                     "duration": duration,
-                    "url": existing[0],  # Use local file path
+                    "url": existing[0],
                 }
         except Exception:
             pass
-
+        
         # Start download in background
         def download_bg():
             try:
-                # Check if already downloaded
+                music_dir = os.path.expanduser("~/storage/Music")
+                os.makedirs(music_dir, exist_ok=True)
+                
+                # Download audio stream
+                audio_response = requests.get(stream_url, stream=True)
+                filepath = f"{music_dir}/{title}.m4a"
+                
+                with open(filepath, 'wb') as f:
+                    for chunk in audio_response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                
+                # Save to database
                 db_dir = "/app/data" if os.path.exists("/app") else "data"
                 conn = sqlite3.connect(f"{db_dir}/music.db")
-                existing = conn.execute(
-                    "SELECT filepath FROM downloads WHERE title = ?", (title,)
-                ).fetchone()
-
-                if existing and os.path.exists(existing[0]):
-                    conn.close()
-                    print(f"⏭ {title} already downloaded")
-                    return
-
-                os.makedirs(music_dir, exist_ok=True)
-                ydl.download([info["webpage_url"]])
-                # Save to database
-                filepath = f"{music_dir}/{title}.{info.get('ext', 'm4a')}"
                 conn.execute(
                     "INSERT OR REPLACE INTO downloads (id, title, uploader, duration, url, filepath) VALUES (?, ?, ?, ?, ?, ?)",
-                    (
-                        video_id,
-                        title,
-                        uploader,
-                        duration,
-                        info["webpage_url"],
-                        filepath,
-                    ),
+                    (video_id, title, uploader, duration, f"https://youtube.com/watch?v={video_id}", filepath)
                 )
                 conn.commit()
                 conn.close()
                 print(f"✓ Download of {title} complete")
-            except Exception:
-                pass
-
+            except Exception as e:
+                print(f"Download failed: {e}")
+        
         threading.Thread(target=download_bg, daemon=True).start()
-
+        
+        print(f"📤 Returning metadata: title={title}, uploader={uploader}")
         return {
             "title": title,
             "uploader": uploader,
             "duration": duration,
-            "url": info.get("url"),
+            "url": stream_url,
         }
+        
+    except Exception as e:
+        print(f"Piped API failed: {e}")
+        return None
 
 
 def fill_autoplay_queue():
@@ -188,7 +205,7 @@ def fill_autoplay_queue():
                 f"{last_song[1]} songs",
                 f"{random_songs[0][1] if random_songs else last_song[1]} music",
                 f"songs like {last_song[0]}",
-                "trending music 2024",
+                f"trending music {__import__('datetime').datetime.now().year}",
             ]
             
             for i in range(3):
@@ -294,12 +311,20 @@ def add():
     if not qstr:
         return jsonify(error="missing q"), 400
     try:
+        print(f"🔍 Adding: {qstr}")
         meta = resolve_media(qstr)
+        if not meta:
+            print(f"❌ resolve_media returned None for: {qstr}")
+            return jsonify(error="Could not resolve media"), 500
         item = {"id": uuid.uuid4().hex[:8], **meta, "added_by": added_by}
         with state_lock:
             play_queue.append(item)
+        print(f"✅ Added to queue: {item['title']}")
         return jsonify(ok=True, item=item)
     except Exception as e:
+        import traceback
+        print(f"❌ Add failed for {qstr}: {e}")
+        print(traceback.format_exc())
         return jsonify(error=str(e)), 500
 
 
