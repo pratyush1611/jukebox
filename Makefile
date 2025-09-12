@@ -21,7 +21,7 @@ logs:
 dev:
 	docker compose up
 
-restart: stop run
+restart: stop run logs
 
 status:
 	docker compose ps

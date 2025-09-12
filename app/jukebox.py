@@ -15,7 +15,6 @@ import requests
 import yt_dlp
 from flask import Flask, jsonify, request, send_from_directory
 
-
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "5000"))
 IPC_SOCK = os.environ.get("MPV_IPC", "/tmp/mpv.sock")
@@ -85,8 +84,11 @@ def mpv_send(cmd):
     return False
 
 
-def resolve_media(q_or_url):
+def resolve_media(q_or_url, allow_age_restricted=False):
     music_dir = os.path.expanduser("~/storage/Music")
+    # Create temp directory for search metadata
+    temp_dir = "temp"
+    os.makedirs(temp_dir, exist_ok=True)
     ydl_opts = {
         "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
         "quiet": True,
@@ -96,7 +98,26 @@ def resolve_media(q_or_url):
         "writeinfojson": True,
         "writethumbnail": True,
         "embedthumbnail": True,
+        "outtmpl": {
+            "default": "temp/search_%(title)s.%(ext)s",
+            "infojson": "temp/search_%(title)s.%(ext)s",
+            "thumbnail": "temp/search_%(title)s.%(ext)s",
+        },
     }
+
+    # Add cookies if available (check multiple locations)
+    cookie_paths = [
+        "cookies.txt",  # Current directory
+        os.path.expanduser("~/cookies.txt"),  # Home directory
+        "/data/data/com.termux/files/home/cookies.txt",  # Termux home
+        os.path.expanduser("~/storage/downloads/cookies.txt"),  # Android downloads
+    ]
+
+    for cookie_path in cookie_paths:
+        if os.path.exists(cookie_path):
+            ydl_opts["cookiefile"] = cookie_path
+            print(f"🍪 Using cookies from: {cookie_path}")
+            break
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
@@ -108,6 +129,14 @@ def resolve_media(q_or_url):
                     duration = entry.get("duration", 0)
                     title = entry.get("title", "").lower()
                     uploader = entry.get("uploader", "").lower()
+
+                    # Skip age-restricted content unless allowed
+                    if (
+                        not allow_age_restricted
+                        and entry.get("age_limit")
+                        and entry.get("age_limit") > 0
+                    ):
+                        continue
 
                     # Skip if too long (>20 min) or too short (<30 sec)
                     if duration and (duration > 1200 or duration < 30):
@@ -205,6 +234,17 @@ def resolve_media(q_or_url):
                     # Ensure metadata directory exists
                     metadata_dir = f"{target_dir}/metadata"
                     os.makedirs(metadata_dir, exist_ok=True)
+
+                    # Enable metadata only for actual downloads
+                    download_opts["writeinfojson"] = True
+                    download_opts["writethumbnail"] = True
+                    download_opts["embedthumbnail"] = True
+
+                    # Add cookies for downloads too
+                    for cookie_path in cookie_paths:
+                        if os.path.exists(cookie_path):
+                            download_opts["cookiefile"] = cookie_path
+                            break
 
                     download_opts["outtmpl"] = {
                         "default": f"{target_dir}/{artist} - {title}.%(ext)s",
@@ -319,6 +359,13 @@ def fill_autoplay_queue():
         recent_songs = conn.execute(
             "SELECT title, uploader FROM downloads ORDER BY downloaded_at DESC LIMIT 5"
         ).fetchall()
+
+        # Get all songs played in last 3 hours to avoid repeating
+        played_recently = conn.execute(
+            "SELECT title, uploader FROM downloads WHERE downloaded_at > datetime('now', '-3 hours')"
+        ).fetchall()
+        played_set = {f"{title}-{artist}" for title, artist in played_recently}
+
         conn.close()
 
         print(f"🎵 Same session ({hours_since:.1f}h ago) - adding autoplay suggestions")
@@ -351,13 +398,17 @@ def fill_autoplay_queue():
                 if autoplay_meta:
                     song_id = f"{autoplay_meta['title']}-{autoplay_meta['uploader']}"
 
-                    # Skip if already suggested or in current queue
-                    if song_id in suggested_songs or any(
-                        item.get("title") == autoplay_meta["title"]
-                        and item.get("uploader") == autoplay_meta["uploader"]
-                        for item in play_queue
+                    # Skip if already suggested, in current queue, or played recently
+                    if (
+                        song_id in suggested_songs
+                        or song_id in played_set
+                        or any(
+                            item.get("title") == autoplay_meta["title"]
+                            and item.get("uploader") == autoplay_meta["uploader"]
+                            for item in play_queue
+                        )
                     ):
-                        print(f"🔄 Skipping duplicate: {autoplay_meta['title']}")
+                        print(f"🔄 Skipping duplicate/recent: {autoplay_meta['title']}")
                         continue
 
                     autoplay_item = {
@@ -386,8 +437,11 @@ def player_loop():
                 fill_autoplay_queue()
 
             if current is None and play_queue:
-                current = play_queue.pop(0)
-                mpv_send({"command": ["loadfile", current["url"], "replace"]})
+                next_song = play_queue[0]
+                # Skip loading placeholders, wait for them to resolve
+                if not next_song.get("loading", False) and next_song.get("url"):
+                    current = play_queue.pop(0)
+                    mpv_send({"command": ["loadfile", current["url"], "replace"]})
         # Keep queue filled
         with state_lock:
             if len(play_queue) < 3:
@@ -434,25 +488,35 @@ def ui():
 
 @app.get("/queue")
 def get_queue():
-    with state_lock:
-        now_with_progress = current.copy() if current else None
-        if now_with_progress:
-            try:
-                s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                s.connect(IPC_SOCK)
-                s.sendall(
-                    (
-                        json.dumps({"command": ["get_property", "time-pos"]}) + "\n"
-                    ).encode()
-                )
-                data = s.recv(2048).decode()
-                s.close()
-                if '"data":' in data:
-                    pos = json.loads(data).get("data", 0) or 0
-                    now_with_progress["position"] = int(pos)
-            except Exception:
-                now_with_progress["position"] = 0
-        return jsonify({"now": now_with_progress, "queue": play_queue})
+    try:
+        with state_lock:
+            now_with_progress = current.copy() if current else None
+            if now_with_progress:
+                try:
+                    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    s.connect(IPC_SOCK)
+                    s.sendall(
+                        (
+                            json.dumps({"command": ["get_property", "time-pos"]}) + "\n"
+                        ).encode()
+                    )
+                    data = s.recv(2048).decode()
+                    s.close()
+                    if '"data":' in data:
+                        pos = json.loads(data).get("data", 0) or 0
+                        now_with_progress["position"] = int(pos)
+                except Exception:
+                    now_with_progress["position"] = 0
+
+            response_data = {"now": now_with_progress, "queue": play_queue}
+            response = jsonify(response_data)
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+            return response
+    except Exception as e:
+        print(f"❌ Queue endpoint error: {e}")
+        return jsonify({"now": None, "queue": []}), 500
 
 
 @app.post("/add")
@@ -460,27 +524,87 @@ def add():
     payload = request.get_json(silent=True) or {}
     qstr = payload.get("q") or request.args.get("q", "").strip()
     play_next = payload.get("play_next", False)
+    allow_age_restricted = payload.get("allow_age_restricted", False)
     added_by = payload.get("by") or request.remote_addr
     if not qstr:
         return jsonify(error="missing q"), 400
-    try:
-        print(f"🔍 Adding: {qstr}")
-        meta = resolve_media(qstr)
-        if not meta:
-            print(f"❌ resolve_media returned None for: {qstr}")
-            return jsonify(error="Could not resolve media"), 500
-        item = {"id": uuid.uuid4().hex[:8], **meta, "added_by": added_by}
-        with state_lock:
-            if play_next:
-                play_queue.insert(0, item)  # Add to top
+
+    # Add placeholder immediately for responsive UI
+    placeholder_item = {
+        "id": uuid.uuid4().hex[:8],
+        "title": f"Loading: {qstr[:50]}...",
+        "uploader": "Loading...",
+        "duration": 0,
+        "url": None,
+        "added_by": added_by,
+        "loading": True,
+    }
+
+    # Check if queue is empty and nothing is playing
+    is_first_song = False
+    with state_lock:
+        is_first_song = len(play_queue) == 0 and current is None
+
+    with state_lock:
+        if play_next:
+            play_queue.insert(0, placeholder_item)
+            insert_pos = 0
+        else:
+            # Find last user-added song and insert after it
+            insert_pos = len(play_queue)  # Default to end
+            for i in range(len(play_queue) - 1, -1, -1):  # Search backwards
+                if play_queue[i].get("added_by") != "autoplay":
+                    insert_pos = i + 1
+                    break
+                elif i == 0:  # All songs are autoplay
+                    insert_pos = 0
+            play_queue.insert(insert_pos, placeholder_item)
+
+    # Resolve media in background and update placeholder
+    def resolve_and_update():
+        global current
+        try:
+            print(f"🔍 Resolving: {qstr}")
+            meta = resolve_media(qstr, allow_age_restricted)
+            if meta:
+                with state_lock:
+                    # Find and update the placeholder
+                    for i, item in enumerate(play_queue):
+                        if item["id"] == placeholder_item["id"]:
+                            play_queue[i] = {
+                                "id": placeholder_item["id"],
+                                **meta,
+                                "added_by": added_by,
+                            }
+                            # If this was first in queue and nothing is playing, start it
+                            if i == 0 and current is None:
+                                current = play_queue.pop(0)
+                                mpv_send(
+                                    {"command": ["loadfile", current["url"], "replace"]}
+                                )
+                                print(f"▶️ Started playing: {current['title']}")
+                            break
+                print(f"✅ Resolved: {meta['title']}")
             else:
-                play_queue.append(item)  # Add to bottom
-        print(f"✅ Added to {'top' if play_next else 'bottom'}: {item['title']}")
-        return jsonify(ok=True, item=item)
-    except Exception as e:
-        print(f"❌ Add failed for {qstr}: {e}")
-        print(traceback.format_exc())
-        return jsonify(error=str(e)), 500
+                # Remove placeholder if resolution failed
+                with state_lock:
+                    play_queue[:] = [
+                        item
+                        for item in play_queue
+                        if item["id"] != placeholder_item["id"]
+                    ]
+                print(f"❌ Failed to resolve: {qstr}")
+        except Exception as e:
+            # Remove placeholder on error
+            with state_lock:
+                play_queue[:] = [
+                    item for item in play_queue if item["id"] != placeholder_item["id"]
+                ]
+            print(f"❌ Add failed for {qstr}: {e}")
+            print(traceback.format_exc())
+
+    threading.Thread(target=resolve_and_update, daemon=True).start()
+    return jsonify(ok=True, item=placeholder_item)
 
 
 @app.post("/skip")
@@ -512,6 +636,44 @@ def seek():
         return jsonify(error=str(e)), 500
 
 
+def get_local_ip():
+    """Get the local IP address"""
+    try:
+        # Connect to a remote address to determine local IP
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            # In Docker, this might return container IP, so also check host IP
+            if ip.startswith("172.") or ip.startswith("10."):
+                # Try to get host IP from environment or network interfaces
+                import subprocess
+
+                try:
+                    result = subprocess.run(
+                        ["ip", "route", "get", "1"], capture_output=True, text=True
+                    )
+                    for line in result.stdout.split("\n"):
+                        if "src" in line:
+                            host_ip = line.split("src")[1].strip().split()[0]
+                            if not host_ip.startswith(
+                                "172."
+                            ) and not host_ip.startswith("10."):
+                                return host_ip
+                except Exception:
+                    pass
+            return ip
+    except Exception:
+        return "localhost"
+
+
 if __name__ == "__main__":
-    print("Starting Wi-Fi Jukebox")
+    local_ip = get_local_ip()
+    print("\n" + "=" * 50)
+    print("🎵 Wi-Fi Jukebox Started!")
+    print("=" * 50)
+    print(f"📱 Local access:  http://localhost:{PORT}")
+    print(f"🌐 Network access: http://{local_ip}:{PORT}")
+    print("\n📋 Share this URL with others on your WiFi:")
+    print(f"   http://{local_ip}:{PORT}")
+    print("=" * 50 + "\n")
     app.run(host=HOST, port=PORT)

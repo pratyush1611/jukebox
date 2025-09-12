@@ -17,6 +17,9 @@
   <button onclick="const q=document.getElementById('q'); add(q.value,true); q.value=''">Play Next</button>
   <button onclick="const q=document.getElementById('q'); add(q.value,false); q.value=''">Add to Queue</button>
 </div>
+<div style="margin:10px 0">
+  <label><input type="checkbox" id="allowAgeRestricted"> Allow age-restricted content</label>
+</div>
 <ul id=list></ul>
 <div style="margin-top:12px">
   <button onclick="post('/play')">Play</button>
@@ -60,7 +63,8 @@ async function refresh(){
 async function post(u,body){ await j(u,'POST',body); refresh(); }
 async function add(q, playNext){
   if(!q.trim()) return;
-  const r = await j('/add','POST',{q, play_next: playNext});
+  const allowAgeRestricted = document.getElementById('allowAgeRestricted').checked;
+  const r = await j('/add','POST',{q, play_next: playNext, allow_age_restricted: allowAgeRestricted});
   if(r.ok) refresh();
   else alert('Error: ' + (r.error || 'unknown'));
 }

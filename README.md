@@ -18,11 +18,17 @@ A web-based music player that runs on Android (via Termux) and lets people on th
 - **Session-Aware**: Only suggests music during active listening sessions (3-hour window)
 - **Smart Filtering**: Prefers music content (30sec-20min), avoids podcasts/tutorials
 - **Duplicate Prevention**: Tracks suggested songs to avoid repeats
+- **3-Hour Session History**: Prevents suggesting songs already played in current session
+- **Age-Restriction Control**: User-configurable filtering of age-restricted content
+- **Cookie Authentication**: Supports YouTube cookies for accessing restricted content
 - **Personalized**: Based on your actual listening history
 
 ### User Interface
 - **Visual Queue Separation**: Icons distinguish user-added (👤) vs auto-suggested (🎵) songs
 - **Duration Display**: Shows song length for all queued tracks
+- **Age-Restriction Toggle**: Checkbox to allow/block age-restricted content
+- **Network Access Display**: Shows local IP and shareable URL on startup
+- **Non-blocking Addition**: Songs show "Loading..." placeholder while resolving
 - **Real-time Updates**: Queue refreshes every 2 seconds
 - **Mobile-Friendly**: Responsive design for phones/tablets
 - **Progress Tracking**: Shows current song position and duration
@@ -60,6 +66,11 @@ make clean    # Remove containers and cleanup
 ```
 
 Open http://localhost:5000 in your browser.
+
+**Network Access:**
+- **Docker**: Update `HOST_IP` in `docker-compose.yml` with your machine's IP
+- **Get your IP**: `hostname -I | awk '{print $1}'` or `ip route get 1.1.1.1 | grep -oP 'src \K\S+'`
+- **Share URL**: Use the network IP shown in startup logs for other devices
 
 ## Configuration
 
