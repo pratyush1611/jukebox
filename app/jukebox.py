@@ -613,7 +613,10 @@ def add():
                     item for item in play_queue if item["id"] != placeholder_item["id"]
                 ]
             print(f"❌ Add failed for {qstr}: {e}")
-            print(traceback.format_exc())
+            print(f"❌ Full traceback: {traceback.format_exc()}")
+            # Also log to file
+            with open('error.log', 'a') as f:
+                f.write(f"Error resolving {qstr}: {e}\n{traceback.format_exc()}\n\n")
 
     threading.Thread(target=resolve_and_update, daemon=True).start()
     return jsonify(ok=True, item=placeholder_item)
