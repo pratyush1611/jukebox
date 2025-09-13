@@ -18,7 +18,11 @@ from flask import Flask, jsonify, request, send_from_directory
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "5000"))
 # Use Termux path if running on Android, otherwise use /tmp
-default_sock = "/data/data/com.termux/files/usr/tmp/mpv.sock" if os.path.exists("/data/data/com.termux") else "/tmp/mpv.sock"
+default_sock = (
+    "/data/data/com.termux/files/usr/tmp/mpv.sock"
+    if os.path.exists("/data/data/com.termux")
+    else "/tmp/mpv.sock"
+)
 IPC_SOCK = os.environ.get("MPV_IPC", default_sock)
 MPV_EXTRA = (
     os.environ.get("MPV_EXTRA", "").split() if os.environ.get("MPV_EXTRA") else []
@@ -97,8 +101,10 @@ def resolve_media(q_or_url, allow_age_restricted=False):
         "format": "bestaudio[acodec*=opus]/bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best",
         "quiet": True,
         "no_warnings": True,
+        "socket_timeout": 20,
+        "retries": 1,
         "noplaylist": True,
-        "default_search": "ytsearch10:",  # Get more results to filter
+        "default_search": "ytsearch5:",  # Fewer results for faster search
         "writeinfojson": True,
         "writethumbnail": True,
         "embedthumbnail": True,
@@ -615,7 +621,7 @@ def add():
             print(f"❌ Add failed for {qstr}: {e}")
             print(f"❌ Full traceback: {traceback.format_exc()}")
             # Also log to file
-            with open('error.log', 'a') as f:
+            with open("error.log", "a") as f:
                 f.write(f"Error resolving {qstr}: {e}\n{traceback.format_exc()}\n\n")
 
     threading.Thread(target=resolve_and_update, daemon=True).start()
