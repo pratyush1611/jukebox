@@ -28,7 +28,9 @@ A web-based music player that runs on Android (via Termux) and lets people on th
 - **Duration Display**: Shows song length for all queued tracks
 - **Age-Restriction Toggle**: Checkbox to allow/block age-restricted content
 - **Network Access Display**: Shows local IP and shareable URL on startup
-- **Non-blocking Addition**: Songs show "Loading..." placeholder while resolving
+- **Non-blocking Addition**: Songs show "Searching YouTube..." placeholder while resolving
+- **Smart Playback Controls**: Context-aware play/pause button (shows only relevant action)
+- **Integrated Controls**: Play/pause/skip buttons positioned under progress slider
 - **Real-time Updates**: Queue refreshes every 2 seconds
 - **Mobile-Friendly**: Responsive design for phones/tablets
 - **Progress Tracking**: Shows current song position and duration

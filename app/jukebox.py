@@ -532,18 +532,13 @@ def add():
     # Add placeholder immediately for responsive UI
     placeholder_item = {
         "id": uuid.uuid4().hex[:8],
-        "title": f"Loading: {qstr[:50]}...",
+        "title": f"🔍 Searching YouTube: {qstr[:30]}...",
         "uploader": "Loading...",
         "duration": 0,
         "url": None,
         "added_by": added_by,
         "loading": True,
     }
-
-    # Check if queue is empty and nothing is playing
-    is_first_song = False
-    with state_lock:
-        is_first_song = len(play_queue) == 0 and current is None
 
     with state_lock:
         if play_next:

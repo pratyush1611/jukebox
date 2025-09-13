@@ -21,11 +21,6 @@
   <label><input type="checkbox" id="allowAgeRestricted"> Allow age-restricted content</label>
 </div>
 <ul id=list></ul>
-<div style="margin-top:12px">
-  <button onclick="post('/play')">Play</button>
-  <button onclick="post('/pause')">Pause</button>
-  <button onclick="post('/skip')">Skip</button>
-</div>
 <script>
 async function j(url,method='GET',body=null){
   const o={method,headers:{'Content-Type':'application/json'}};
@@ -37,10 +32,24 @@ async function refresh(){
   if(s.now){
     const pos = s.now.position || 0; const dur = s.now.duration || 0;
     const fmt = t => `${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,'0')}`;
+    const isPlaying = pos > 0 && s.now.position !== undefined; // Assume playing if position is updating
+    const playPauseBtn = isPlaying ? 
+      `<button onclick="post('/pause')">⏸️</button>` : 
+      `<button onclick="post('/play')">▶️</button>`;
     n.innerHTML = `<b>Now:</b> ${s.now.title} <small>by ${s.now.uploader}</small>
-      <div id=progress><span>${fmt(pos)}</span><input type=range id=seek min=0 max=${dur} value=${pos}><span>${fmt(dur)}</span></div>`;
+      <div id=progress><span>${fmt(pos)}</span><input type=range id=seek min=0 max=${dur} value=${pos}><span>${fmt(dur)}</span></div>
+      <div style="margin-top:8px">
+        ${playPauseBtn}
+        <button onclick="post('/skip')">⏭️</button>
+      </div>`;
     document.getElementById('seek').oninput = e => post('/seek', {pos: e.target.value});
-  } else n.innerHTML = '<i>Nothing playing</i>';
+  } else {
+    n.innerHTML = `<i>Nothing playing</i>
+      <div style="margin-top:8px">
+        <button onclick="post('/play')">▶️</button>
+        <button onclick="post('/skip')">⏭️</button>
+      </div>`;
+  }
   const ul=document.getElementById('list'); ul.innerHTML='';
   let autoplayStarted = false;
   (s.queue||[]).forEach((it,i)=>{
