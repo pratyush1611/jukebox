@@ -3,7 +3,7 @@ set -e
 # Already in jukebox directory
 # ensure mpv uses Android’s default audio route (AUX/Bluetooth chosen in system)
 export MPV_IPC=/data/data/com.termux/files/usr/tmp/mpv.sock
-export MPV_EXTRA="--ao=pulse,opensles"  # Try PulseAudio first, then OpenSL ES
+export MPV_EXTRA="--ao=alsa,pulse,opensles --audio-device=auto"  # Try multiple audio outputs
 pkill -f 'python .*jukebox.py' >/dev/null 2>&1 || true
 source .venv/bin/activate
 nohup python app/jukebox.py > jukebox.log 2>&1 &

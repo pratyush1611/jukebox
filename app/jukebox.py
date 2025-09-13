@@ -17,7 +17,9 @@ from flask import Flask, jsonify, request, send_from_directory
 
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "5000"))
-IPC_SOCK = os.environ.get("MPV_IPC", "/tmp/mpv.sock")
+# Use Termux path if running on Android, otherwise use /tmp
+default_sock = "/data/data/com.termux/files/usr/tmp/mpv.sock" if os.path.exists("/data/data/com.termux") else "/tmp/mpv.sock"
+IPC_SOCK = os.environ.get("MPV_IPC", default_sock)
 MPV_EXTRA = (
     os.environ.get("MPV_EXTRA", "").split() if os.environ.get("MPV_EXTRA") else []
 )
