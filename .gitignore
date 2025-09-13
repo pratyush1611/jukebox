@@ -6,3 +6,6 @@ downloads/
 *.db
 *.sock
 .DS_Store
+*.json
+.env
+helper_scripts/

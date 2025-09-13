@@ -4,6 +4,7 @@ RUN pip install uv
 WORKDIR /app
 COPY pyproject.toml .
 RUN uv pip install --system --no-cache .
+COPY VERSION /app/
 COPY app/ /app/
 ENV MPV_IPC=/tmp/mpv.sock MPV_EXTRA=--ao=null PORT=5000
 EXPOSE 5000

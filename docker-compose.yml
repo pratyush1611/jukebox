@@ -1,4 +1,3 @@
-version: "3.8"
 services:
   jukebox:
     build: .
@@ -7,7 +6,8 @@ services:
       - MPV_IPC=/tmp/mpv.sock
       - MPV_EXTRA=--ao=null   # silent backend for dev
       - PORT=5000
+      - HOST_IP
     volumes:
       - ./app:/app
-      - ./downloads:/home/user/storage/Music
+      - ./downloads:/root/storage/Music
       - ./data:/app/data

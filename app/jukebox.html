@@ -12,16 +12,15 @@
  #progress{display:flex;align-items:center;gap:8px;margin:8px 0}
 </style>
 <div id=now><i>Nothing playing</i></div>
-<form id=f>
-  <input id=q placeholder="YouTube link or search…" autofocus>
-  <button type=submit>+ Add</button>
-</form>
-<ul id=list></ul>
-<div style="margin-top:12px">
-  <button onclick="post('/play')">Play</button>
-  <button onclick="post('/pause')">Pause</button>
-  <button onclick="post('/skip')">Skip</button>
+<div>
+  <input id=q placeholder="YouTube link or search…" autofocus onkeydown="if(event.key==='Enter'){add(this.value,false);this.value=''}">
+  <button onclick="const q=document.getElementById('q'); add(q.value,true); q.value=''">Play Next</button>
+  <button onclick="const q=document.getElementById('q'); add(q.value,false); q.value=''">Add to Queue</button>
 </div>
+<div style="margin:10px 0">
+  <label><input type="checkbox" id="allowAgeRestricted"> Allow age-restricted content</label>
+</div>
+<ul id=list></ul>
 <script>
 async function j(url,method='GET',body=null){
   const o={method,headers:{'Content-Type':'application/json'}};
@@ -33,21 +32,50 @@ async function refresh(){
   if(s.now){
     const pos = s.now.position || 0; const dur = s.now.duration || 0;
     const fmt = t => `${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,'0')}`;
+    const isPaused = s.now.paused || false;
+    const playPauseBtn = isPaused ? 
+      `<button onclick="post('/play')">▶️</button>` : 
+      `<button onclick="post('/pause')">⏸️</button>`;
     n.innerHTML = `<b>Now:</b> ${s.now.title} <small>by ${s.now.uploader}</small>
-      <div id=progress><span>${fmt(pos)}</span><input type=range id=seek min=0 max=${dur} value=${pos}><span>${fmt(dur)}</span></div>`;
+      <div id=progress><span>${fmt(pos)}</span><input type=range id=seek min=0 max=${dur} value=${pos}><span>${fmt(dur)}</span></div>
+      <div style="margin-top:8px">
+        ${playPauseBtn}
+        <button onclick="post('/skip')">⏭️</button>
+      </div>`;
     document.getElementById('seek').oninput = e => post('/seek', {pos: e.target.value});
-  } else n.innerHTML = '<i>Nothing playing</i>';
+  } else {
+    n.innerHTML = `<i>Nothing playing</i>
+      <div style="margin-top:8px">
+        <button onclick="post('/play')">▶️</button>
+        <button onclick="post('/skip')">⏭️</button>
+      </div>`;
+  }
   const ul=document.getElementById('list'); ul.innerHTML='';
+  let autoplayStarted = false;
   (s.queue||[]).forEach((it,i)=>{
+    // Add separator before first autoplay song
+    if(!autoplayStarted && it.added_by === 'autoplay'){
+      const separator = document.createElement('li');
+      separator.innerHTML = '<hr style="margin:10px 0;border:1px dashed #ccc;"><small style="color:#999;font-style:italic;">🎵 Auto-suggested songs</small>';
+      separator.style.listStyle = 'none';
+      ul.appendChild(separator);
+      autoplayStarted = true;
+    }
     const li=document.createElement('li');
-    li.innerHTML=`<span style="flex:1">${i+1}. ${it.title} <small>by ${it.uploader} — #${it.id}</small></span>`;
+    const icon = it.added_by === 'autoplay' ? '🎵' : '👤';
+    const duration = it.duration ? `${Math.floor(it.duration/60)}:${String(Math.floor(it.duration%60)).padStart(2,'0')}` : '';
+    li.innerHTML=`<span style="flex:1">${icon} ${i+1}. ${it.title} <small>by ${it.uploader} ${duration ? `• ${duration}` : ''} — #${it.id}</small></span>`;
+    if(it.added_by === 'autoplay') li.style.opacity = '0.7';
     ul.appendChild(li);
   });
 }
 async function post(u,body){ await j(u,'POST',body); refresh(); }
-document.getElementById('f').addEventListener('submit', async (e)=>{
-  e.preventDefault(); const v=document.getElementById('q').value.trim(); if(!v) return;
-  await j('/add','POST',{q:v}); document.getElementById('q').value=''; refresh();
-});
+async function add(q, playNext){
+  if(!q.trim()) return;
+  const allowAgeRestricted = document.getElementById('allowAgeRestricted').checked;
+  const r = await j('/add','POST',{q, play_next: playNext, allow_age_restricted: allowAgeRestricted});
+  if(r.ok) refresh();
+  else alert('Error: ' + (r.error || 'unknown'));
+}
 setInterval(refresh,2000); refresh();
 </script>
