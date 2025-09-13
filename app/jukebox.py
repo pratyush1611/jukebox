@@ -495,18 +495,31 @@ def get_queue():
                 try:
                     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                     s.connect(IPC_SOCK)
+                    # Get both position and pause state
                     s.sendall(
                         (
                             json.dumps({"command": ["get_property", "time-pos"]}) + "\n"
                         ).encode()
                     )
                     data = s.recv(2048).decode()
-                    s.close()
                     if '"data":' in data:
                         pos = json.loads(data).get("data", 0) or 0
                         now_with_progress["position"] = int(pos)
+                    
+                    # Get pause state
+                    s.sendall(
+                        (
+                            json.dumps({"command": ["get_property", "pause"]}) + "\n"
+                        ).encode()
+                    )
+                    pause_data = s.recv(2048).decode()
+                    if '"data":' in pause_data:
+                        is_paused = json.loads(pause_data).get("data", False)
+                        now_with_progress["paused"] = is_paused
+                    s.close()
                 except Exception:
                     now_with_progress["position"] = 0
+                    now_with_progress["paused"] = False
 
             response_data = {"now": now_with_progress, "queue": play_queue}
             response = jsonify(response_data)
