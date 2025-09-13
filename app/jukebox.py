@@ -27,7 +27,7 @@ IPC_SOCK = os.environ.get("MPV_IPC", default_sock)
 MPV_EXTRA = (
     os.environ.get("MPV_EXTRA", "").split() if os.environ.get("MPV_EXTRA") else []
 )
-LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY", "174b9ac49d2ec2ec72b2e25b27b2e563")
+LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY")
 
 app = Flask(__name__)
 play_queue = []
@@ -313,6 +313,8 @@ def resolve_media(q_or_url, allow_age_restricted=False):
 
 def get_lastfm_recommendations(artist, track=None):
     """Get recommendations from Last.fm API"""
+    if not LASTFM_API_KEY:
+        return []
     try:
         if track:
             # Get similar tracks
