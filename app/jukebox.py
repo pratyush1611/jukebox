@@ -85,7 +85,9 @@ def mpv_send(cmd):
 
 
 def resolve_media(q_or_url, allow_age_restricted=False):
-    music_dir = os.path.expanduser("~/storage/Music")
+    music_dir = os.path.expanduser(
+        "~/storage/music"
+    )  # Use lowercase symlink to Android Music
     # Create temp directory for search metadata
     temp_dir = "temp"
     os.makedirs(temp_dir, exist_ok=True)
@@ -505,7 +507,7 @@ def get_queue():
                     if '"data":' in data:
                         pos = json.loads(data).get("data", 0) or 0
                         now_with_progress["position"] = int(pos)
-                    
+
                     # Get pause state
                     s.sendall(
                         (
