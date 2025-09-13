@@ -90,7 +90,7 @@ def resolve_media(q_or_url, allow_age_restricted=False):
     temp_dir = "temp"
     os.makedirs(temp_dir, exist_ok=True)
     ydl_opts = {
-        "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
+        "format": "bestaudio[acodec*=opus]/bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best",
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
