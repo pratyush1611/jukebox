@@ -1,4 +1,4 @@
-# Wi-Fi Jukebox v1.0.0
+# Wi-Fi Jukebox v2.0.0
 
 A web-based music player that runs on Android (via Termux) and lets people on the same Wi-Fi network add YouTube videos to a shared queue. Music plays through the Android phone's speakers.
 
@@ -24,15 +24,17 @@ A web-based music player that runs on Android (via Termux) and lets people on th
 - **Personalized**: Based on your actual listening history
 
 ### User Interface
-- **Visual Queue Separation**: Icons distinguish user-added (👤) vs auto-suggested (🎵) songs
-- **Duration Display**: Shows song length for all queued tracks
-- **Age-Restriction Toggle**: Checkbox to allow/block age-restricted content
-- **Network Access Display**: Shows local IP and shareable URL on startup
-- **Non-blocking Addition**: Songs show "Searching YouTube..." placeholder while resolving
-- **Smart Playback Controls**: Context-aware play/pause button (shows only relevant action)
+- **Material 3 Design**: Modern mobile-first UI with proper color schemes and typography
+- **User Landing Page**: Name/emoji selection for personalized queue tracking
+- **Session History**: Recently played songs with replay functionality (last 20 tracks)
+- **QR Code Sharing**: Material 3 styled QR codes for easy device connection
+- **User Identity Tracking**: Queue shows who added each song with emoji + name
+- **Visual Queue Separation**: Icons distinguish user-added vs auto-suggested songs
+- **Smart Playbook Controls**: Context-aware play/pause button (shows only relevant action)
 - **Integrated Controls**: Play/pause/skip buttons positioned under progress slider
+- **Age-Restriction Toggle**: Collapsible settings panel with content filtering
 - **Real-time Updates**: Queue refreshes every 2 seconds
-- **Mobile-Friendly**: Responsive design for phones/tablets
+- **Mobile-Optimized**: Touch-friendly controls with proper spacing
 - **Progress Tracking**: Shows current song position and duration
 
 ## Quick Start
@@ -70,9 +72,14 @@ make clean    # Remove containers and cleanup
 Open http://localhost:5000 in your browser.
 
 **Network Access:**
-- **Docker**: Update `HOST_IP` in `docker-compose.yml` with your machine's IP
-- **Get your IP**: `hostname -I | awk '{print $1}'` or `ip route get 1.1.1.1 | grep -oP 'src \K\S+'`
+- **Docker**: Auto-detects host IP or set `HOST_IP` environment variable
+- **QR Code**: Click QR icon in app to generate shareable QR code
 - **Share URL**: Use the network IP shown in startup logs for other devices
+
+**User Flow:**
+1. **Landing Page**: Enter name and choose emoji for identity
+2. **Main App**: Add songs, view queue, and see who added what
+3. **History**: Replay recently played songs from session history
 
 ## Configuration
 
@@ -95,9 +102,21 @@ LASTFM_SHARED_SECRET=your_secret_here
 
 ## File Organization
 
-Music is organized in a structured hierarchy:
+**Code Structure:**
 ```
-~/storage/Music/
+app/
+├── jukebox.py          # Python backend
+├── landing.html        # User onboarding page
+├── jukebox.html        # Main app interface
+└── static/
+    ├── styles.css      # Material 3 design system
+    ├── landing.css     # Landing page styles
+    └── app.js         # Frontend functionality
+```
+
+**Music Storage:**
+```
+~/storage/music/        # Android Music folder (Termux)
 ├── Artist Name/
 │   ├── 2023 Album Name/
 │   │   ├── Artist Name - Song Title.m4a

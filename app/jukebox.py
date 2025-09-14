@@ -32,6 +32,7 @@ LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY")
 app = Flask(__name__)
 play_queue = []
 current = None
+played_history = []  # Track played songs in current session
 state_lock = threading.Lock()
 cmd_queue = q.Queue()
 suggested_songs = set()  # Track already suggested songs
@@ -484,6 +485,11 @@ def player_loop():
             s.close()
             if '"data":true' in data:
                 with state_lock:
+                    if current:  # Add finished song to history
+                        played_history.append(current)
+                        # Keep only last 20 songs in history
+                        if len(played_history) > 20:
+                            played_history.pop(0)
                     current = None
         except Exception:
             pass
@@ -494,8 +500,16 @@ threading.Thread(target=player_loop, daemon=True).start()
 
 
 @app.get("/")
+def landing():
+    return send_from_directory(".", "landing.html")
+
+@app.get("/app")
 def ui():
     return send_from_directory(".", "jukebox.html")
+
+@app.get("/static/<path:filename>")
+def static_files(filename):
+    return send_from_directory("static", filename)
 
 
 @app.get("/queue")
@@ -533,7 +547,7 @@ def get_queue():
                     now_with_progress["position"] = 0
                     now_with_progress["paused"] = False
 
-            response_data = {"now": now_with_progress, "queue": play_queue}
+            response_data = {"now": now_with_progress, "queue": play_queue, "history": played_history}
             response = jsonify(response_data)
             response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
             response.headers["Pragma"] = "no-cache"

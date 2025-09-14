@@ -1,81 +1,90 @@
 <!doctype html>
-<meta name=viewport content="width=device-width, initial-scale=1">
-<title>Wi-Fi Jukebox</title>
-<style>
- body{font-family:system-ui,Arial;max-width:800px;margin:24px auto;padding:0 12px}
- #now{padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:12px}
- li{display:flex;align-items:center;gap:8px;margin:6px 0}
- button{padding:6px 10px;border-radius:6px;border:1px solid #ccc;background:#f5f5f5;cursor:pointer}
- input[type=text]{width:70%;padding:8px}
- input[type=range]{width:100%;margin:8px 0}
- small{color:#666}
- #progress{display:flex;align-items:center;gap:8px;margin:8px 0}
-</style>
-<div id=now><i>Nothing playing</i></div>
-<div>
-  <input id=q placeholder="YouTube link or search…" autofocus onkeydown="if(event.key==='Enter'){add(this.value,false);this.value=''}">
-  <button onclick="const q=document.getElementById('q'); add(q.value,true); q.value=''">Play Next</button>
-  <button onclick="const q=document.getElementById('q'); add(q.value,false); q.value=''">Add to Queue</button>
-</div>
-<div style="margin:10px 0">
-  <label><input type="checkbox" id="allowAgeRestricted"> Allow age-restricted content</label>
-</div>
-<ul id=list></ul>
-<script>
-async function j(url,method='GET',body=null){
-  const o={method,headers:{'Content-Type':'application/json'}};
-  if(body) o.body=JSON.stringify(body);
-  const r=await fetch(url,o); return r.json();
-}
-async function refresh(){
-  const s=await j('/queue'); const n=document.getElementById('now');
-  if(s.now){
-    const pos = s.now.position || 0; const dur = s.now.duration || 0;
-    const fmt = t => `${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,'0')}`;
-    const isPaused = s.now.paused || false;
-    const playPauseBtn = isPaused ? 
-      `<button onclick="post('/play')">▶️</button>` : 
-      `<button onclick="post('/pause')">⏸️</button>`;
-    n.innerHTML = `<b>Now:</b> ${s.now.title} <small>by ${s.now.uploader}</small>
-      <div id=progress><span>${fmt(pos)}</span><input type=range id=seek min=0 max=${dur} value=${pos}><span>${fmt(dur)}</span></div>
-      <div style="margin-top:8px">
-        ${playPauseBtn}
-        <button onclick="post('/skip')">⏭️</button>
-      </div>`;
-    document.getElementById('seek').oninput = e => post('/seek', {pos: e.target.value});
-  } else {
-    n.innerHTML = `<i>Nothing playing</i>
-      <div style="margin-top:8px">
-        <button onclick="post('/play')">▶️</button>
-        <button onclick="post('/skip')">⏭️</button>
-      </div>`;
-  }
-  const ul=document.getElementById('list'); ul.innerHTML='';
-  let autoplayStarted = false;
-  (s.queue||[]).forEach((it,i)=>{
-    // Add separator before first autoplay song
-    if(!autoplayStarted && it.added_by === 'autoplay'){
-      const separator = document.createElement('li');
-      separator.innerHTML = '<hr style="margin:10px 0;border:1px dashed #ccc;"><small style="color:#999;font-style:italic;">🎵 Auto-suggested songs</small>';
-      separator.style.listStyle = 'none';
-      ul.appendChild(separator);
-      autoplayStarted = true;
-    }
-    const li=document.createElement('li');
-    const icon = it.added_by === 'autoplay' ? '🎵' : '👤';
-    const duration = it.duration ? `${Math.floor(it.duration/60)}:${String(Math.floor(it.duration%60)).padStart(2,'0')}` : '';
-    li.innerHTML=`<span style="flex:1">${icon} ${i+1}. ${it.title} <small>by ${it.uploader} ${duration ? `• ${duration}` : ''} — #${it.id}</small></span>`;
-    if(it.added_by === 'autoplay') li.style.opacity = '0.7';
-    ul.appendChild(li);
-  });
-}
-async function post(u,body){ await j(u,'POST',body); refresh(); }
-async function add(q, playNext){
-  if(!q.trim()) return;
-  const allowAgeRestricted = document.getElementById('allowAgeRestricted').checked;
-  const r = await j('/add','POST',{q, play_next: playNext, allow_age_restricted: allowAgeRestricted});
-  if(r.ok) refresh();
-  else alert('Error: ' + (r.error || 'unknown'));
-}
-setInterval(refresh,2000); refresh();
-</script>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wi-Fi Jukebox</title>
+  
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Now Playing Section -->
+    <div id="now" class="now-playing card">
+      <div class="now-content">
+        <i>Loading...</i>
+      </div>
+    </div>
+    
+    <!-- Search Section -->
+    <div class="search-container card">
+      <input 
+        id="q" 
+        class="search-input" 
+        placeholder="Search for music or paste YouTube link..." 
+        onkeydown="if(event.key==='Enter'){add(this.value,false);this.value=''}"
+      >
+      
+      <div class="search-buttons">
+        <button class="btn btn-primary" onclick="const q=document.getElementById('q'); add(q.value,true); q.value=''">
+          <span class="material-icons">skip_next</span>
+          Play Next
+        </button>
+        <button class="btn btn-secondary" onclick="const q=document.getElementById('q'); add(q.value,false); q.value=''">
+          <span class="material-icons">add</span>
+          Add to Queue
+        </button>
+      </div>
+      
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <button class="settings-toggle" onclick="toggleQR()">
+          <span class="material-icons">qr_code</span>
+        </button>
+        <button class="settings-toggle" onclick="toggleSettings()">
+          <span class="material-icons">settings</span>
+        </button>
+      </div>
+      
+      <div id="qr-panel" class="settings-panel" style="display:none">
+        <div style="text-align:center;padding:16px">
+          <div id="qr-code"></div>
+          <p style="margin:8px 0;font-size:14px;color:var(--md-sys-color-on-surface-variant)">Scan to connect</p>
+        </div>
+      </div>
+      
+      <div id="settings" class="settings-panel" style="display:none">
+        <div class="checkbox-container">
+          <input type="checkbox" id="allowAgeRestricted">
+          <label for="allowAgeRestricted">Allow age-restricted content</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- History Section -->
+    <div class="card" id="history-card" style="display:none">
+      <div class="queue-header">
+        <h3 style="margin:0;font-weight:500">Recently Played</h3>
+        <span id="history-count" style="color:var(--md-sys-color-on-surface-variant);font-size:14px">0 songs</span>
+      </div>
+      <div id="history-list"></div>
+    </div>
+    
+    <!-- Queue Section -->
+    <div class="card">
+      <div class="queue-header">
+        <h3 style="margin:0;font-weight:500">Queue</h3>
+        <span id="queue-count" style="color:var(--md-sys-color-on-surface-variant);font-size:14px">0 songs</span>
+      </div>
+      <div id="list"></div>
+    </div>
+  </div>
+  
+  <!-- Scripts -->
+  <script src="/static/app.js"></script>
+</body>
+</html>

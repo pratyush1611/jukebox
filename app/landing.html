@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Join Wi-Fi Jukebox</title>
+  
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/landing.css">
+</head>
+<body>
+  <div class="landing-container">
+    <div class="landing-card card">
+      <h1 class="landing-title">🎵 Wi-Fi Jukebox</h1>
+      <p class="landing-subtitle">Join the party and add your favorite songs!</p>
+      
+      <form id="join-form">
+        <div class="form-group">
+          <label class="form-label" for="alias">Your Name</label>
+          <input 
+            type="text" 
+            id="alias" 
+            class="search-input" 
+            placeholder="Enter your name or nickname"
+            maxlength="20"
+            required
+          >
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Choose Your Emoji</label>
+          <div class="emoji-grid" id="emoji-grid">
+            <div class="emoji-option" data-emoji="😀">😀</div>
+            <div class="emoji-option" data-emoji="😎">😎</div>
+            <div class="emoji-option" data-emoji="🤩">🤩</div>
+            <div class="emoji-option" data-emoji="😊">😊</div>
+            <div class="emoji-option" data-emoji="🥳">🥳</div>
+            <div class="emoji-option" data-emoji="😍">😍</div>
+            <div class="emoji-option" data-emoji="🤗">🤗</div>
+            <div class="emoji-option" data-emoji="😋">😋</div>
+            <div class="emoji-option" data-emoji="🤔">🤔</div>
+            <div class="emoji-option" data-emoji="😴">😴</div>
+            <div class="emoji-option" data-emoji="🤖">🤖</div>
+            <div class="emoji-option" data-emoji="👻">👻</div>
+            <div class="emoji-option" data-emoji="🎸">🎸</div>
+            <div class="emoji-option" data-emoji="🎤">🎤</div>
+            <div class="emoji-option" data-emoji="🎧">🎧</div>
+            <div class="emoji-option" data-emoji="🎵">🎵</div>
+            <div class="emoji-option" data-emoji="🔥">🔥</div>
+            <div class="emoji-option" data-emoji="⚡">⚡</div>
+            <div class="emoji-option" data-emoji="🌟">🌟</div>
+            <div class="emoji-option" data-emoji="💫">💫</div>
+            <div class="emoji-option" data-emoji="🚀">🚀</div>
+            <div class="emoji-option" data-emoji="🎯">🎯</div>
+            <div class="emoji-option" data-emoji="💎">💎</div>
+            <div class="emoji-option" data-emoji="🏆">🏆</div>
+          </div>
+        </div>
+        
+        <button type="submit" class="btn btn-primary join-btn" id="join-btn" disabled>
+          <span class="material-icons">music_note</span>
+          Join the Jukebox
+        </button>
+      </form>
+    </div>
+  </div>
+  
+  <script>
+    let selectedEmoji = '';
+    
+    // Handle emoji selection
+    document.querySelectorAll('.emoji-option').forEach(option => {
+      option.addEventListener('click', () => {
+        // Remove previous selection
+        document.querySelectorAll('.emoji-option').forEach(opt => opt.classList.remove('selected'));
+        
+        // Select current emoji
+        option.classList.add('selected');
+        selectedEmoji = option.dataset.emoji;
+        
+        // Enable join button if name is also filled
+        updateJoinButton();
+      });
+    });
+    
+    // Handle name input
+    document.getElementById('alias').addEventListener('input', updateJoinButton);
+    
+    function updateJoinButton() {
+      const alias = document.getElementById('alias').value.trim();
+      const joinBtn = document.getElementById('join-btn');
+      
+      if (alias && selectedEmoji) {
+        joinBtn.disabled = false;
+      } else {
+        joinBtn.disabled = true;
+      }
+    }
+    
+    // Handle form submission
+    document.getElementById('join-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      
+      const alias = document.getElementById('alias').value.trim();
+      if (!alias || !selectedEmoji) return;
+      
+      // Store user info in localStorage
+      localStorage.setItem('jukeboxUser', JSON.stringify({
+        alias: alias,
+        emoji: selectedEmoji
+      }));
+      
+      // Redirect to main app
+      window.location.href = '/app';
+    });
+    
+    // Auto-select random emoji on load
+    window.addEventListener('load', () => {
+      const emojis = document.querySelectorAll('.emoji-option');
+      const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+      randomEmoji.click();
+    });
+  </script>
+</body>
+</html>
